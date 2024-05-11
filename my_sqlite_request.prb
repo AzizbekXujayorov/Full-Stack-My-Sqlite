@@ -1,0 +1,132 @@
+require 'csv'
+
+class MySqliteRequest
+  def initialize
+    @require_type = ""
+    @table_name = ""
+    @tables_names = []
+    @col_name = []
+    @where_column = {}
+    @value = {}
+  end
+
+  def from_table(table_name)
+    @table_name = table_name
+    self
+  end
+
+  def where(p1, p2)
+    @where_column[p1] = p2
+    self
+  end
+
+  def select(*p1)
+    @col_name = p1
+    @require_type = "select"
+    self
+  end
+
+  def update(p1)
+    @table_name = p1
+    @require_type = "update"
+    self
+  end
+
+  def insert(table_name)
+    @table_name = table_name
+    @require_type = "insert"
+    self
+  end
+
+  def join(*tables_names)
+    @tables_names = tables_names
+    self
+  end
+
+  def delete
+    @require_type = "delete"
+    self
+  end
+
+  def values(p1)
+    @value = p1
+    self
+  end
+
+  def print_item(item)
+    if @col_name == ["*"]
+      puts item
+      item
+    else
+      temp = item.select { |k, _| @col_name.include?(k) }
+      puts temp
+      temp
+    end
+  end
+
+  def print_row(item)
+    CSV.open(@table_name, 'a', write_headers: true, headers: item.keys) do |f|
+      f << item
+    end
+  end
+
+  def selection
+    result = []
+    CSV.foreach(@table_name, headers: true) do |row|
+      item = row.to_h
+      if @where_column.empty? || @where_column.all? { |k, v| item[k] == v }
+        result << print_item(item)
+      end
+    end
+    result
+  end
+
+  def insertion
+    print_row(@value)
+  end
+
+  def updating
+    data = CSV.read(@table_name, headers: true).map(&:to_h)
+
+    CSV.open(@table_name, 'w', write_headers: true, headers: data.first.keys) do |f|
+      data.each do |item|
+        if @where_column.empty? || @where_column.all? { |k, v| item[k] == v }
+          item.merge!(@value)
+        end
+        f << item
+      end
+    end
+  end
+
+  def deleting
+    data = CSV.read(@table_name, headers: true).map(&:to_h)
+
+    CSV.open(@table_name, 'w', write_headers: true, headers: data.first.keys) do |f|
+      data.each do |item|
+        unless @where_column.empty? && @where_column.all? { |k, v| item[k] == v }
+          f << item
+        end
+      end
+    end
+  end
+
+  def run
+    case @require_type
+    when "select"
+      selection
+    when "insert"
+      insertion
+    when "update"
+      updating
+    when "delete"
+      deleting
+    end
+  end
+end
+
+# Example of using the class
+if __FILE__ == $PROGRAM_NAME
+  req = MySqliteRequest.new.from_table('sample.csv').where('id', '1').select('*')
+  result = req.run
+  puts result
+end
